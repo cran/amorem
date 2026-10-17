@@ -46,6 +46,16 @@
 #'     `x_ev` / `x_nv` are absent. Identified only when the event and control
 #'     differ on `x`.
 #' }
+#' Smooth terms take the basis settings of [mgcv::s()] / [mgcv::te()] as
+#' named arguments after the covariate, so each term can use its own basis
+#' dimension and type: `tv(x, k = 20, bs = "cr") + nl(y, k = 5, bs = "ps")`.
+#' Any `s()` / `te()` argument other than `by` is accepted (e.g. `m`, `fx`,
+#' `sp`, `xt`); for `tvnl` a vector `k` or `bs` gives one value per margin,
+#' time first (`tvnl(x, k = c(5, 8))`). Argument values are evaluated in the
+#' formula's environment. A term without its own `k` / `bs` uses the global
+#' `k` / `bs` arguments of `rem()`, and mgcv's defaults when those are `NULL`.
+#' `re()` takes no further arguments (its basis is fixed to `bs = "re"`).
+#'
 #' For the `gam` method the left-hand side is ignored (the response is the
 #' constant case indicator); for `clogit` the left-hand side names the 0/1 event
 #' indicator column (e.g. `event ~ x`), unless `case` is given explicitly.
@@ -57,6 +67,19 @@
 #' otherwise `x_ev` / `x_nv`. `tvnl` uses `transformed_time` when present.
 #' Undirected logs (senders only, no receiver/`TARGET` column) are supported.
 #'
+#' @section Name clashes with other relational-event packages:
+#' The name `rem()` is used by three CRAN packages: this one,
+#' \pkg{relevent} (on CRAN since 2010) and \pkg{redeem} (2026). Attaching
+#' more than one of them masks the others, and R will say so at load time.
+#'
+#' The deeper issue is dispatch rather than masking. `amorem`'s fitted object
+#' has class `"rem"`, and \pkg{relevent} and \pkg{redeem} register S3 methods
+#' on that same class name, so merely *loading* one of them --- attaching is
+#' not required --- can re-point `print()`, `summary()`, `plot()`, `predict()`
+#' and `logLik()` for objects fitted here. If you work with more than one of
+#' these packages in a session, call `amorem::rem()` explicitly and be
+#' deliberate about which package is loaded when you print or plot a fit.
+#'
 #' @param formula A formula; see *Formula syntax*.
 #' @param data A data.frame of preprocessed case-control data (wide for the
 #'   `gam` method; long with a case indicator and stratum for `clogit`). For
@@ -67,10 +90,21 @@
 #' @param case Optional name of the 0/1 event-indicator column for the `clogit`
 #'   and `nn` backends. If `NULL` (default), the indicator is taken from the
 #'   formula's left-hand side (e.g. `event ~ x`). Ignored by the `gam` method.
-#' @param stratum Name of the column grouping each case with its controls
-#'   (required by `clogit`).
+#' @param stratum Name of the column grouping each case with its controls,
+#'   for `clogit` and `nn`. When `NULL`, a column named `stratum` (as written
+#'   by [sample_non_events()]) is used if present; otherwise the strata are
+#'   derived as `cumsum(case == 1)`.
 #' @param time Name of the time column, required for `tv` / `tvnl` terms.
-#' @param k Optional integer basis dimension passed to `s()` / `te()`.
+#'   A single column `time` gives the event and its control the same time.
+#'   When it is absent and `time_ev` / `time_nv` are present (the wide form of
+#'   time-shifted sampling, [sample_non_events()] with
+#'   `shift = "exponential"`), each row is evaluated at its own time: `tv(x)`
+#'   contributes \eqn{\beta(t)x_{ev} - \beta(t^*)x_{nv}}{beta(t) x_ev - beta(t*) x_nv}
+#'   and needs `x_ev` / `x_nv`.
+#' @param k Optional basis dimension passed to every `s()` / `te()` smooth
+#'   that does not set its own `k` (see *Formula syntax*).
+#' @param bs Optional basis type (e.g. `"tp"`, `"cr"`, `"ps"`) passed to every
+#'   `s()` / `te()` smooth that does not set its own `bs`.
 #' @param gam_method Smoothness-selection method for the `gam` backend,
 #'   passed to [mgcv::gam()]. Defaults to `NULL`, which uses mgcv's own default
 #'   (`"GCV.Cp"`) and reproduces the Intro-to-REM tutorial parameterization.
@@ -88,7 +122,7 @@
 #'   (whose `wide = TRUE` output is a valid input here),
 #'   [simulate_directed_hyperevents_tvnl()].
 #'
-#' @importFrom survival clogit strata coxph Surv
+#' @importFrom survival clogit strata coxph Surv frailty
 #'
 #' @examples
 #' set.seed(1)
@@ -103,7 +137,7 @@
 rem <- function(formula, data,
                 method = c("gam", "clogit", "nn"),
                 case = NULL, stratum = NULL, time = NULL,
-                k = NULL, gam_method = NULL, nn = nn_control(), ...) {
+                k = NULL, bs = NULL, gam_method = NULL, nn = nn_control(), ...) {
   method <- match.arg(method)
   if (!inherits(formula, "formula")) stop("`formula` must be a formula.")
   if (!is.data.frame(data)) stop("`data` must be a data.frame.")
@@ -112,12 +146,8 @@ rem <- function(formula, data,
   if (!length(term_labels)) {
     stop("`formula` must have at least one term on the right-hand side.")
   }
-  parse_term <- function(lbl) {
-    m <- regmatches(lbl, regexec("^(tvnl|tv|nl|re)\\((.+)\\)$", lbl))[[1]]
-    if (length(m) == 3L) list(type = m[2], var = trimws(m[3]))
-    else list(type = "linear", var = lbl)
-  }
-  terms_info <- lapply(term_labels, parse_term)
+  terms_info <- lapply(term_labels, .parse_rem_term,
+                       env = environment(formula))
 
   if (method == "clogit") {
     if (!requireNamespace("survival", quietly = TRUE)) {
@@ -245,20 +275,42 @@ rem <- function(formula, data,
     stop("Cannot find ev/nv columns for non-linear term '", v, "' ",
          "(looked for '[transform_]", v, "_ev'/'_nv').")
   }
+  # Event and control times as an n x 2 matrix. One `time` column gives both
+  # rows of a stratum the same time; `<time>_ev` / `<time>_nv` (wide output of
+  # time-shifted sampling) give the control its own time.
+  time_pair <- function(col) {
+    one <- data[[col]]
+    if (!is.null(one)) return(cbind(case = as.numeric(one), ctrl = as.numeric(one)))
+    ev <- data[[paste0(col, "_ev")]]; nv <- data[[paste0(col, "_nv")]]
+    if (!is.null(ev) && !is.null(nv)) return(cbind(case = as.numeric(ev), ctrl = as.numeric(nv)))
+    NULL
+  }
   get_time <- function() {
     if (is.null(time)) stop("`time` (a column name) is required for tv/tvnl terms.")
-    if (is.null(data[[time]])) stop("time column '", time, "' not found in `data`.")
-    as.numeric(data[[time]])
+    tp <- time_pair(time)
+    if (is.null(tp)) {
+      stop("time column '", time, "' not found in `data` (looked for '", time,
+           "' and '", time, "_ev'/'", time, "_nv').")
+    }
+    tp
   }
   get_time_trans <- function() {
-    if (!is.null(data[["transformed_time"]])) as.numeric(data[["transformed_time"]])
-    else get_time()
+    tp <- time_pair("transformed_time")
+    if (is.null(tp)) get_time() else tp
   }
 
-  reserved <- c("one", ".I", ".time", ".T")
+  reserved <- c("one", ".I", ".time", ".T", ".TP")
   df <- list(one = rep(1, n), .I = cbind(case = rep(1, n), ctrl = rep(-1, n)))
   rhs <- character(0)
-  k_arg <- if (is.null(k)) "" else sprintf(", k = %d", k)
+  # Basis arguments for one smooth term: the term's own, then the global k/bs.
+  smooth_args <- function(ti) {
+    a <- ti$args
+    if (is.null(a$k) && !is.null(k)) a$k <- k
+    if (is.null(a$bs) && !is.null(bs)) a$bs <- bs
+    if (!length(a)) return("")
+    paste0(", ", paste(names(a), vapply(a, .deparse_arg, character(1)),
+                       sep = " = ", collapse = ", "))
+  }
   need_time <- FALSE; need_ttrans <- FALSE
   bt <- function(x) paste0("`", x, "`")            # backtick for formula safety
   for (ti in terms_info) {
@@ -273,15 +325,31 @@ rem <- function(formula, data,
       df[[v]] <- get_diff(v)
       rhs <- c(rhs, bt(v))
     } else if (ti$type == "tv") {
-      df[[v]] <- get_diff(v); need_time <- TRUE
-      rhs <- c(rhs, sprintf("s(%s, by = %s%s)", bt(".time"), bt(v), k_arg))
+      tp <- get_time()
+      if (all(tp[, 1] == tp[, 2])) {
+        # Shared time: beta(t) * (x_ev - x_nv).
+        df[[v]] <- get_diff(v); need_time <- TRUE
+        rhs <- c(rhs, sprintf("s(%s, by = %s%s)", bt(".time"), bt(v), smooth_args(ti)))
+      } else {
+        # Shifted control: beta(t) * x_ev - beta(t*) * x_nv, a by-matrix smooth
+        # over the event and control times.
+        ev <- data[[paste0(v, "_ev")]]; nv <- data[[paste0(v, "_nv")]]
+        if (is.null(ev) || is.null(nv)) {
+          stop("tv(", v, ") with different event and control times needs '",
+               v, "_ev' and '", v, "_nv' columns.")
+        }
+        xi <- paste0(".XI_", v)
+        df[[xi]] <- cbind(case = as.numeric(ev), ctrl = -as.numeric(nv))
+        df[[".TP"]] <- tp
+        rhs <- c(rhs, sprintf("s(%s, by = %s%s)", bt(".TP"), bt(xi), smooth_args(ti)))
+      }
     } else if (ti$type == "nl") {
       xc <- paste0(".X_", v); df[[xc]] <- get_evnv(v)
-      rhs <- c(rhs, sprintf("s(%s, by = %s%s)", bt(xc), bt(".I"), k_arg))
+      rhs <- c(rhs, sprintf("s(%s, by = %s%s)", bt(xc), bt(".I"), smooth_args(ti)))
     } else if (ti$type == "tvnl") {
       xc <- paste0(".X_", v); df[[xc]] <- get_evnv(v); need_ttrans <- TRUE
       rhs <- c(rhs, sprintf("te(%s, %s, by = %s%s)",
-                            bt(".T"), bt(xc), bt(".I"), k_arg))
+                            bt(".T"), bt(xc), bt(".I"), smooth_args(ti)))
     } else if (ti$type == "re") {
       # Actor (or other grouping) random effect, matching the matched
       # case-control construction of the REM tutorial (Intro-to-REM, 3.4): an
@@ -304,8 +372,8 @@ rem <- function(formula, data,
       rhs <- c(rhs, sprintf("s(%s, by = %s, bs = \"re\")", bt(rc), bt(".I")))
     }
   }
-  if (need_time)   df[[".time"]] <- get_time()
-  if (need_ttrans) { tt <- get_time_trans(); df[[".T"]] <- cbind(tt, tt) }
+  if (need_time)   df[[".time"]] <- get_time()[, 1]
+  if (need_ttrans) df[[".T"]] <- get_time_trans()
 
   fm <- stats::as.formula(paste("one ~ -1 +", paste(rhs, collapse = " + ")))
   # Smoothness-selection method passed to mgcv::gam(). Default NULL lets mgcv
@@ -346,11 +414,52 @@ logLik.rem <- function(object, ...) stats::logLik(object$fit)
 #' @export
 predict.rem <- function(object, ...) stats::predict(object$fit, ...)
 
+# Parse one formula term label. `tv(x, ...)`, `nl(x, ...)`, `tvnl(x, ...)` and
+# `re(x)` become list(type, var, args), where `args` holds the named basis
+# arguments evaluated in `env`; anything else is a linear term named by its label.
+.parse_rem_term <- function(lbl, env = parent.frame()) {
+  linear <- list(type = "linear", var = lbl, args = list())
+  expr <- tryCatch(str2lang(lbl), error = function(e) NULL)
+  if (!is.call(expr) || !is.name(expr[[1L]])) return(linear)
+  type <- as.character(expr[[1L]])
+  if (!type %in% c("tv", "nl", "tvnl", "re")) return(linear)
+
+  call_args <- as.list(expr)[-1L]
+  nms <- names(call_args)
+  if (is.null(nms)) nms <- rep("", length(call_args))
+  unnamed <- which(!nzchar(nms))
+  if (length(unnamed) != 1L || unnamed != 1L) {
+    stop("`", lbl, "`: give the covariate as the first argument and any ",
+         "basis settings as named arguments, e.g. ", type, "(x, k = 10).")
+  }
+  v <- call_args[[1L]]
+  if (!(is.name(v) || (is.character(v) && length(v) == 1L))) {
+    stop("`", lbl, "`: the first argument must be a column name.")
+  }
+  args <- call_args[-1L]
+  if (type == "re" && length(args)) {
+    stop("`", lbl, "`: re() takes no further arguments (its basis is bs = \"re\").")
+  }
+  if ("by" %in% names(args)) {
+    stop("`", lbl, "`: `by` is set by rem() and cannot be given in the term.")
+  }
+  args <- lapply(args, eval, envir = env)
+  list(type = type, var = as.character(v), args = args)
+}
+
+# Render an evaluated argument value back into formula source.
+.deparse_arg <- function(x) paste(deparse(x, width.cutoff = 500L), collapse = " ")
+
 # Derive the case-control stratum vector aligned to data's rows.
 # If `stratum` names a column, use it (forward-filling blanks, since eventnet
-# leaves the stratum id empty on control rows); otherwise derive it as
-# cumsum(case == 1), which labels each case-then-controls block.
+# leaves the stratum id empty on control rows). With `stratum = NULL`, use the
+# `stratum` column that sample_non_events() writes when there is one -- rows
+# reordered by time (endogenous_features() sorts them, and shifted controls
+# have their own times) no longer keep each case next to its controls --
+# and otherwise derive it as cumsum(case == 1), which labels each
+# case-then-controls block.
 .derive_stratum <- function(data, case, stratum) {
+  if (is.null(stratum) && "stratum" %in% names(data)) stratum <- "stratum"
   if (!is.null(stratum)) {
     if (is.null(data[[stratum]])) {
       stop("stratum column '", stratum, "' not found in `data`.")

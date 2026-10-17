@@ -8,12 +8,16 @@ sample_non_events(
   event_log,
   n_controls = 1,
   scope = c("all", "appearance", "citation"),
-  mode = c("two", "one"),
+  mode = c("one", "two"),
   risk = c("standard", "remove"),
   exclude_pairs = NULL,
+  exclude_concurrent = NULL,
   allow_loops = FALSE,
   seed = NULL,
-  max_attempts = 1000
+  max_attempts = 1000,
+  shift = c("none", "exponential"),
+  shift_scale = 1,
+  window = NULL
 )
 }
 \arguments{
@@ -24,13 +28,18 @@ event.}
 
 \item{scope}{Candidate set definition. \code{"all"} uses every actor observed in
 the data; \code{"appearance"} restricts to actors that have appeared in prior
-events; \code{"citation"} matches citation networks where senders are restricted
+events (so the first event, with no prior events, gets no controls);
+\code{"citation"} matches citation networks where senders are restricted
 to the papers that debut at the current time and receivers must have
 appeared earlier.}
 
-\item{mode}{\code{"one"} draws both sender and receiver from the same candidate
-pool (single-mode). \code{"two"} samples sender and receiver from separate pools
-(two-mode).}
+\item{mode}{\code{"one"} (default) draws both sender and receiver from the same
+candidate pool (single-mode): every actor seen in either role can be a
+control sender or receiver, as in networks whose senders and receivers are
+one node set (e.g. bike stations, e-mail users). \code{"two"} samples sender and
+receiver from separate pools (two-mode): an actor seen only as a receiver
+is never a control sender, and vice versa, as in bipartite networks (e.g.
+species invading regions).}
 
 \item{risk}{Strategy governing the risk set. \code{"standard"} (default) keeps all
 unrealized dyads available across strata, whereas \code{"remove"} deletes a dyad
@@ -45,24 +54,85 @@ must never be sampled (e.g. an alien species' native range, or any dyad
 forbidden in advance). Columns named \code{sender}/\code{receiver} are used if
 present, otherwise the first two columns.}
 
+\item{exclude_concurrent}{Logical; keep dyads with an event at the focal
+event's own timestamp out of its control pool? Defaults to \code{TRUE} under
+\code{risk = "remove"} and \code{FALSE} under \code{risk = "standard"}, where a tied event
+is still at risk at that instant (the Breslow convention).}
+
 \item{allow_loops}{Logical; can sampled non-events have identical sender and
 receiver?}
 
 \item{seed}{Optional seed for reproducibility.}
 
 \item{max_attempts}{Maximum resampling attempts per control before giving up
-(prevents infinite loops when candidate sets are small).}
+(prevents infinite loops when candidate sets are small). With
+\code{shift = "exponential"} it is the number of rejection draws tried before
+the valid candidates are enumerated, so sampling never fails there.}
+
+\item{shift}{\code{"none"} (default) gives every control its event's time, so a
+global covariate (a function of time only, e.g. weather or time of day)
+takes the same value within each stratum and cancels from the partial
+likelihood. \code{"exponential"} samples controls from a time-shifted copy of
+the event process (Lembo, Juozaitienė, Vinciotti & Wit 2025, Section 4),
+so controls carry their own times and global effects stay estimable; see
+\emph{Time-shifted sampling}.}
+
+\item{shift_scale}{Positive number \eqn{\nu}{nu}: the shifts have mean
+\eqn{\nu}{nu} times the average event time, measured from the start of
+\code{window} (the paper uses \eqn{\nu = 1}{nu = 1}). Larger shifts carry more
+information about global effects, but leave more events with no control.
+Used only with \code{shift = "exponential"}.}
+
+\item{window}{Observation window \code{c(start, end)} for
+\code{shift = "exponential"}. Defaults to \code{c(min(time), max(time))}; pass the
+true window (the paper's \eqn{[0, T]}{[0, T]}) when it is known.}
 }
 \value{
 A data.frame containing the original events (\code{event = 1}) and the
-sampled controls (\code{event = 0}), grouped by \code{stratum} identifiers.
+sampled controls (\code{event = 0}), grouped by \code{stratum} identifiers. With
+\code{shift = "exponential"} it carries \code{attr(, "shift")}: a list with the
+shift \code{mean}, the \code{window}, the per-dyad \code{shifts} (named
+\code{"sender->receiver"}) and the \code{uninformative} strata that got no control.
 }
 \description{
 Given an observed event log, generate nested case-control data by sampling
 counterfactual sender--receiver pairs according to predefined strategies.
 }
+\section{Time-shifted sampling}{
+
+With \code{shift = "exponential"}, every dyad of the risk set (all sender
+\eqn{\times}{x} receiver pairs for \code{mode = "two"}, all ordered actor pairs for
+\code{mode = "one"}) draws one shift \eqn{h_{sr} \sim \mathrm{Exp}}{h_sr ~ Exp},
+reused for every event on that dyad. Event \eqn{k} on dyad \eqn{(s, r)} moves
+to \eqn{t^e = t_k + h_{sr}}{t_e = t_k + h_sr}; its control is drawn
+uniformly from the other dyads whose back-shifted time
+\eqn{t^* = t^e - h_{s^*r^*}}{t* = t_e - h_s*r*} lies in \code{window}, and is
+stored with \code{time} \eqn{t^*}{t*}. The risk-set rules are evaluated at
+\eqn{t^*}{t*}: \code{exclude_pairs} always applies; under \code{risk = "remove"} a
+dyad that has fired before \eqn{t^*}{t*} is not at risk; under
+\code{scope = "appearance"} both actors must have appeared in an event before
+\eqn{t^*}{t*}. An event whose shifted risk set holds no other valid dyad
+carries no information and gets no controls. \code{scope = "citation"} is not
+supported, and \code{exclude_concurrent} is not used (control times are
+continuous).
+
+Covariates for a control must then be evaluated at its own time: compute
+endogenous statistics with
+\code{endogenous_features(cc, stats, history_log = event_log)}, which evaluates
+each row against the events strictly before it, and evaluate global
+covariates at each row's \code{time}. \code{\link[=widen_case_control]{widen_case_control()}} then gives
+\code{time_ev} / \code{time_nv} and \verb{<cov>_ev} / \verb{<cov>_nv}, and a global effect is
+fitted with \verb{rem(~ nl(<cov>))}, the baseline with \code{rem(~ nl(time))}.
+}
+
 \examples{
 data(classroom_events)
 cc <- sample_non_events(classroom_events, n_controls = 1, seed = 1)
 head(cc)
+}
+\references{
+Lembo M, Juozaitienė R, Vinciotti V, Wit EC (2025). Relational event models
+with global covariates: an application to bike sharing. \emph{Journal of the
+Royal Statistical Society, Series C}, 75, 583--600.
+\doi{10.1093/jrsssc/qlaf058}.
 }

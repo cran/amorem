@@ -29,7 +29,7 @@ specs <- list(
 res <- compare_models(classroom_events, specs, seed = 11)
 res
 
-## ----eval = requireNamespace("survival", quietly = TRUE)----------------------
+## -----------------------------------------------------------------------------
 compare_models(classroom_events, specs,
                n_controls = 3, seed = 11)
 

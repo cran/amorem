@@ -12,6 +12,7 @@ rem(
   stratum = NULL,
   time = NULL,
   k = NULL,
+  bs = NULL,
   gam_method = NULL,
   nn = nn_control(),
   ...
@@ -32,12 +33,24 @@ indicator with control rows) is detected and widened automatically via
 and \code{nn} backends. If \code{NULL} (default), the indicator is taken from the
 formula's left-hand side (e.g. \code{event ~ x}). Ignored by the \code{gam} method.}
 
-\item{stratum}{Name of the column grouping each case with its controls
-(required by \code{clogit}).}
+\item{stratum}{Name of the column grouping each case with its controls,
+for \code{clogit} and \code{nn}. When \code{NULL}, a column named \code{stratum} (as written
+by \code{\link[=sample_non_events]{sample_non_events()}}) is used if present; otherwise the strata are
+derived as \code{cumsum(case == 1)}.}
 
-\item{time}{Name of the time column, required for \code{tv} / \code{tvnl} terms.}
+\item{time}{Name of the time column, required for \code{tv} / \code{tvnl} terms.
+A single column \code{time} gives the event and its control the same time.
+When it is absent and \code{time_ev} / \code{time_nv} are present (the wide form of
+time-shifted sampling, \code{\link[=sample_non_events]{sample_non_events()}} with
+\code{shift = "exponential"}), each row is evaluated at its own time: \code{tv(x)}
+contributes \eqn{\beta(t)x_{ev} - \beta(t^*)x_{nv}}{beta(t) x_ev - beta(t*) x_nv}
+and needs \code{x_ev} / \code{x_nv}.}
 
-\item{k}{Optional integer basis dimension passed to \code{s()} / \code{te()}.}
+\item{k}{Optional basis dimension passed to every \code{s()} / \code{te()} smooth
+that does not set its own \code{k} (see \emph{Formula syntax}).}
+
+\item{bs}{Optional basis type (e.g. \code{"tp"}, \code{"cr"}, \code{"ps"}) passed to every
+\code{s()} / \code{te()} smooth that does not set its own \code{bs}.}
 
 \item{gam_method}{Smoothness-selection method for the \code{gam} backend,
 passed to \code{\link[mgcv:gam]{mgcv::gam()}}. Defaults to \code{NULL}, which uses mgcv's own default
@@ -104,6 +117,16 @@ species-invasiveness term). Falls back to a single column \code{x} when
 \code{x_ev} / \code{x_nv} are absent. Identified only when the event and control
 differ on \code{x}.
 }
+Smooth terms take the basis settings of \code{\link[mgcv:s]{mgcv::s()}} / \code{\link[mgcv:te]{mgcv::te()}} as
+named arguments after the covariate, so each term can use its own basis
+dimension and type: \code{tv(x, k = 20, bs = "cr") + nl(y, k = 5, bs = "ps")}.
+Any \code{s()} / \code{te()} argument other than \code{by} is accepted (e.g. \code{m}, \code{fx},
+\code{sp}, \code{xt}); for \code{tvnl} a vector \code{k} or \code{bs} gives one value per margin,
+time first (\code{tvnl(x, k = c(5, 8))}). Argument values are evaluated in the
+formula's environment. A term without its own \code{k} / \code{bs} uses the global
+\code{k} / \code{bs} arguments of \code{rem()}, and mgcv's defaults when those are \code{NULL}.
+\code{re()} takes no further arguments (its basis is fixed to \code{bs = "re"}).
+
 For the \code{gam} method the left-hand side is ignored (the response is the
 constant case indicator); for \code{clogit} the left-hand side names the 0/1 event
 indicator column (e.g. \code{event ~ x}), unless \code{case} is given explicitly.
@@ -116,6 +139,21 @@ else \code{d_x}, else \code{x_ev - x_nv}. Non-linear terms use \code{transform_x
 \code{transform_x_nv} when present (the eventnet spline-transformed covariate),
 otherwise \code{x_ev} / \code{x_nv}. \code{tvnl} uses \code{transformed_time} when present.
 Undirected logs (senders only, no receiver/\code{TARGET} column) are supported.
+}
+
+\section{Name clashes with other relational-event packages}{
+
+The name \code{rem()} is used by three CRAN packages: this one,
+\pkg{relevent} (on CRAN since 2010) and \pkg{redeem} (2026). Attaching
+more than one of them masks the others, and R will say so at load time.
+
+The deeper issue is dispatch rather than masking. \code{amorem}'s fitted object
+has class \code{"rem"}, and \pkg{relevent} and \pkg{redeem} register S3 methods
+on that same class name, so merely \emph{loading} one of them --- attaching is
+not required --- can re-point \code{print()}, \code{summary()}, \code{plot()}, \code{predict()}
+and \code{logLik()} for objects fitted here. If you work with more than one of
+these packages in a session, call \code{amorem::rem()} explicitly and be
+deliberate about which package is loaded when you print or plot a fit.
 }
 
 \examples{

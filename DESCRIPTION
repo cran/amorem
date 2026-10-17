@@ -1,21 +1,38 @@
 Package: amorem
 Title: Augmented Modelling of Relational Events
-Version: 1.0.0
+Version: 1.1.0
 Authors@R: c(
-    person(given = "Francisco", family = "Richter", email = "richtf@usi.ch", role = c("aut", "cre")),
+    person(given = "Francisco", family = "Richter", email = "richtf@usi.ch", role = c("aut", "cre", "cph")),
     person(given = "Martina", family = "Boschi", role = "aut"),
     person(given = "Ernst C.", family = "Wit", role = "aut"),
     person(given = "Melania", family = "Lembo", role = "aut"))
-Description: Utilities for simulating and prototyping relational event models,
-    including helpers to generate dynamic event sequences and covariate
-    processes for sender and receiver sets. The endogenous-effect and
-    case-control estimation machinery follows Juozaitiene and Wit (2024)
-    <doi:10.1093/jrsssa/qnae132>.
+Description: An integrated workflow for relational event models, in which
+    timestamped interactions among actors arrive in continuous time and the
+    event rate depends on the history of the network itself. Event streams are
+    simulated by an exact Gillespie kernel or an approximate tau-leap kernel;
+    non-events are drawn by case-control sampling in the manner of Lerner and
+    Lomi (2020) <doi:10.1017/nws.2019.57>, or from a time-shifted copy of the
+    process so that covariates shared by all dyads at a given time remain
+    estimable (Lembo et al. 2025, <doi:10.1093/jrsssc/qlaf058>); the
+    timing- and closure-based
+    endogenous statistics of Juozaitiene and Wit (2024)
+    <doi:10.1093/jrsssa/qnae132> are computed from that history; and one
+    front-end fits the resulting case-control data by conditional-logistic
+    partial likelihood, by penalised regression on its degenerate
+    one-control binomial form (which admits smooth, time-varying and actor
+    random effects), or by stochastic gradient descent, including the
+    additive-spline construction of Filippi-Mazzola and Wit (2024)
+    <doi:10.1093/jrsssc/qlae023>. Martingale-residual goodness-of-fit
+    diagnostics are provided for the linear fit, together with simulation and
+    statistic computation for relational hyper-events, a collection of
+    documented event logs from published interaction networks, and a
+    reconstructed El Nino index as a global covariate.
 License: MIT + file LICENSE
 Depends: R (>= 4.2.0)
 URL: https://franciscorichter.github.io/amorem/,
         https://github.com/franciscorichter/amorem
-Imports: splines, stats, Rcpp, survival, withr
+BugReports: https://github.com/franciscorichter/amorem/issues
+Imports: splines, stats, Rcpp, survival (>= 3.7-3), withr
 LinkingTo: Rcpp
 Suggests: torch, testthat (>= 3.1.0), mgcv, coxme, roxygen2 (>= 7.3.0),
         pkgdown (>= 2.0.0), knitr, rmarkdown
@@ -25,11 +42,11 @@ Config/testthat/edition: 3
 RoxygenNote: 7.3.3
 VignetteBuilder: knitr
 NeedsCompilation: yes
-Packaged: 2026-06-22 19:25:02 UTC; pancho
-Author: Francisco Richter [aut, cre],
+Packaged: 2026-10-16 23:40:56 UTC; pancho
+Author: Francisco Richter [aut, cre, cph],
   Martina Boschi [aut],
   Ernst C. Wit [aut],
   Melania Lembo [aut]
 Maintainer: Francisco Richter <richtf@usi.ch>
 Repository: CRAN
-Date/Publication: 2026-06-29 13:50:12 UTC
+Date/Publication: 2026-10-17 22:40:35 UTC

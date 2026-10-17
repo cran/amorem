@@ -394,9 +394,9 @@ r<sup>(4ai)/t</sup>(7ai) (interrupted timing).</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">compare_models</span>(classroom_events, specs, <span class="at">seed =</span> <span class="dv">11</span>)</span>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>res</span>
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co">#&gt;         model n_terms n_obs   log_lik      AIC delta_AIC</span></span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; 1       count       2   691 -305.5233 615.0466    0.0000</span></span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; 2  continuous       2   691 -421.1231 846.2462  231.1996</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; 3 interrupted       2   691 -439.6904 883.3809  268.3343</span></span></code></pre></div>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; 1       count       2   691 -280.8221 565.6442    0.0000</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; 2 interrupted       2   691 -412.7271 829.4541  263.8099</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; 3  continuous       2   691 -438.9000 881.8000  316.1557</span></span></code></pre></div>
 <p>The helper draws one case-control sample (default
 <code>n_controls = 1</code>) shared across every specification, computes
 the union of all requested statistics with
@@ -419,14 +419,12 @@ controls per case for tighter inference:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">compare_models</span>(classroom_events, specs,</span>
 <span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>               <span class="at">n_controls =</span> <span class="dv">3</span>, <span class="at">seed =</span> <span class="dv">11</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co">#&gt;         model n_terms n_obs   log_lik      AIC delta_AIC</span></span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co">#&gt; 1       count       2   691 -5248.242 11880.48    0.0000</span></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt; 2  continuous       2   691 -5368.088 12120.18  239.6934</span></span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt; 3 interrupted       2   691 -5449.816 12283.63  403.1494</span></span></code></pre></div>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co">#&gt; 1       count       2   691 -653.3589 1310.718    0.0000</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt; 2 interrupted       2   691 -864.9598 1733.920  423.2017</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt; 3  continuous       2   691 -919.1762 1842.352  531.6345</span></span></code></pre></div>
 <p>The <code>n_obs</code> column now reports the number of strata (one
-per case), and <code>survival</code> is in the package’s
-<em>Suggests</em> — required only when <code>n_controls &gt; 1</code>.
-AIC values across specs remain comparable because every spec sees the
-same shared case-control sample.</p>
+per case). AIC values across specs remain comparable because every spec
+sees the same shared case-control sample.</p>
 </div>
 </div>
 <div id="inspect-coefficients-of-a-chosen-specification" class="section level2">
@@ -452,9 +450,9 @@ fit directly:</p>
 <span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a></span>
 <span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">glm</span>(one <span class="sc">~</span> d_rec <span class="sc">+</span> d_trans <span class="sc">-</span> <span class="dv">1</span>, <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>, <span class="at">data =</span> df)</span>
 <span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="fu">summary</span>(fit)<span class="sc">$</span>coefficients</span>
-<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="co">#&gt;           Estimate Std. Error   z value     Pr(&gt;|z|)</span></span>
-<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="co">#&gt; d_rec   -0.1008825 0.01912790 -5.274104 1.334064e-07</span></span>
-<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="co">#&gt; d_trans -0.1319044 0.02943224 -4.481630 7.407511e-06</span></span></code></pre></div>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="co">#&gt;            Estimate Std. Error    z value     Pr(&gt;|z|)</span></span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="co">#&gt; d_rec    0.01707064 0.01832493  0.9315532 3.515675e-01</span></span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="co">#&gt; d_trans -0.16703689 0.01846586 -9.0457142 1.486900e-19</span></span></code></pre></div>
 <p>The same recipe scales to any subset of the statistics in the
 catalogue. Use <code>?endogenous_features</code> to see the full
 list.</p>
@@ -487,17 +485,17 @@ ranking.</p>
 <span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a>res2 <span class="ot">&lt;-</span> <span class="fu">compare_models</span>(sim, specs, <span class="at">seed =</span> <span class="dv">7</span>)</span>
 <span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co">#&gt; Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred</span></span>
 <span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a>res2</span>
-<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="co">#&gt;         model n_terms n_obs    log_lik      AIC delta_AIC</span></span>
-<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="co">#&gt; 1       count       2   600  -60.15295 124.3059    0.0000</span></span>
-<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; 2  continuous       2   600 -378.42664 760.8533  636.5474</span></span>
-<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt; 3 interrupted       2   600 -407.21051 818.4210  694.1151</span></span></code></pre></div>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="co">#&gt;         model n_terms n_obs   log_lik      AIC delta_AIC</span></span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="co">#&gt; 1       count       2   600  -57.1382 118.2764    0.0000</span></span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; 2 interrupted       2   600 -242.3602 488.7204  370.4440</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt; 3  continuous       2   600 -276.6789 557.3578  439.0814</span></span></code></pre></div>
 </div>
 <div id="references" class="section level2">
 <h2>References</h2>
 <ul>
 <li>Juozaitienė R, Wit EC (2024). It’s about time: revisiting
 reciprocity and triadicity in relational event analysis. <em>Journal of
-the Royal Statistical Society Series A</em> 188(4), 1246–1262. <a href="doi:10.1093/jrsssa/qnae132" class="uri">doi:10.1093/jrsssa/qnae132</a>.</li>
+the Royal Statistical Society Series A</em> 188(4), 1246–1262. <a href="https://doi.org/10.1093/jrsssa/qnae132">doi:10.1093/jrsssa/qnae132</a>.</li>
 <li>Vu D, Pattison P, Robins G (2017). Relational event models for
 social learning in MOOCs. <em>Social Networks</em> 43, 121–135.</li>
 <li>McFarland D (2001). Student resistance. <em>AJS</em> 107(3),
