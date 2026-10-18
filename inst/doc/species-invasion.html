@@ -508,12 +508,14 @@ constant that cancels in event-minus-control differences:</p>
 <div id="where-to-go-from-here" class="section level2">
 <h2>Where to go from here</h2>
 <ul>
-<li>Real data: replace <code>dist_matrix</code> with a
-country-by-country distance table and the simulated log with a curated
-invasion record of first establishments.</li>
-<li>Baseline trend: on real data the background rate changes over the
-centuries (trade, shipping, survey effort). It is a global effect too,
-and enters as <code>nl(time)</code> on the same shifted design.</li>
+<li>Observed records: <code>alien_invasions</code> ships with amorem
+(first records of alien species by region, 1880-2005); use it in place
+of the simulated log, with a country-by-country distance table in place
+of <code>dist_matrix</code>.</li>
+<li>Baseline trend: in observed records the background rate changes over
+the centuries (trade, shipping, survey effort). It is a global effect
+too, and enters as <code>nl(time)</code> on the same shifted
+design.</li>
 <li>Timing: <code>shift_scale</code> sets the mean shift as a multiple
 of the average event time. Larger shifts carry more information about
 ENSO but leave more events with no valid control

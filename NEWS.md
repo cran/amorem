@@ -1,3 +1,85 @@
+# amorem 1.2.0
+
+## Bug fixes
+
+* `rem(method = "gam")` warns when rows with missing covariate values are left
+  out of the fit, and records which rows it used (`fit$rows`, with `fit$n`
+  counting only those). `gof_rem()` keeps the same rows when given the full
+  data; it stopped with "non-conformable arguments" before.
+
+* `sample_non_events(scope = "citation")` always draws the citing paper and
+  the cited papers from separate pools. Under the `mode = "one"` default of
+  1.1.0 it pooled them, so most controls had a sender other than the citing
+  paper.
+
+* `rem(method = "nn")` and `nn_uncertainty()` no longer change the caller's
+  random-number state when given a seed (CRAN policy); fitted results are
+  unchanged.
+
+* Partial-dependence curves of `plot()` on neural fits and of
+  `nn_uncertainty()` span the 1st to 99th percentile of each feature instead
+  of the mean ± 2 standard deviations, which reached below the data for
+  skewed, non-negative statistics.
+
+* Concordance of neural fits splits a tied top score evenly between the tied
+  candidates; it gave the whole stratum to the event.
+
+* `simulate_relational_events(method = "tau_leap")` stops with a message when
+  a single step would draw more than ten million events, which happens when
+  an effect grows without bound; it could exhaust memory.
+
+## New features
+
+* `gof_rem()` tests a model fitted with `rem(method = "gam")` with cumulative
+  martingale residuals (Boschi & Wit 2025): over event time
+  (`test = "time"`), over the quantiles of a covariate
+  (`test = "functional_form"`, which detects a wrong shape of the effect), or
+  over the quantiles weighted by the term's basis
+  (`test = "functional_form_score"`). It works on linear and smooth terms of
+  the fitted model, and its null distribution is a multiplier bootstrap that
+  subtracts the drift from estimating the coefficients. It has `print()` and
+  `plot()` methods (`plot()` takes `main` and a `legend` position). The existing `gof_univariate()`, `gof_multivariate()`,
+  `gof_global()` and `gof_auxiliary()` are unchanged.
+
+* `rem()` fits store the name of their `time` column.
+
+## Datasets
+
+* New `alien_mammals`: the risk table of the first records of alien mammals
+  with the covariates of Juozaitienė et al. (2023) (distance to the nearest
+  invaded region, trade, temperature difference, colonial ties, land use),
+  and the never-at-risk pairs and species entry years as attributes; used in
+  the species-invasion section of the software paper.
+
+* New event logs, all under licences that allow redistribution:
+  `copenhagen_calls`, `copenhagen_sms` and `copenhagen_actors` (Copenhagen
+  Networks Study, MIT); `us_leader_visits` (leader-to-leader visits to and from
+  the United States, 1945-2019, CC0); `football_results` (men's international
+  football matches since 1872, CC0); `ucdp_dyads` (UCDP armed-conflict dyads,
+  1946-2025, CC BY 4.0); `alien_invasions` (first records of alien species by
+  region, 1880-2005, CC0).
+
+* New hyperevent log: `congress_bills_118`, one sponsor and the cosponsors of
+  each bill of the 118th US Congress, with `congress_members_118` (public
+  domain).
+
+* New global covariates: `oni` (Oceanic Nino Index since 1950), `daily_weather`
+  (NOAA daily temperature and precipitation for the cities of the bundled email
+  and messaging logs) and `public_holidays`.
+
+* `radoslaw_email` is rebuilt from the authors' CC0 release (Nurek & Michalski
+  2020, doi:10.7910/DVN/6Z3CGX). It keeps the original employee ids, which
+  match the new `radoslaw_hierarchy` (who reports to whom), and its
+  timestamps are read as Warsaw local time. The previous copy, from Network
+  Repository, read them as UTC, so it ignored daylight saving time: events
+  sent during Polish summer time are now one hour earlier relative to the
+  first event, and `unix_origin` is one hour earlier. The number of events
+  and each employee's activity are unchanged.
+
+* The pkgdown site has a data catalogue: licences, download code and
+  structural profiles of 78 relational-event datasets and covariates, including
+  the many whose licences do not allow amorem to redistribute them.
+
 # amorem 1.1.0
 
 ## Bug fixes
